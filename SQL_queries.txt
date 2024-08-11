@@ -1,0 +1,386 @@
+CREATE DATABASE project;
+
+-- Creating Project Database
+
+CREATE USER 'land_admin'@'localhost' IDENTIFIED BY 'landpassword';
+
+-- Query OK, 0 rows affected (0.02 sec)
+
+GRANT ALL PRIVILEGES ON project.* to 'land_admin'@'localhost';
+
+-- Query OK, 0 rows affected (0.01 sec)
+
+-- Creating a new user to control through php
+
+USE project;
+
+-- Creating Tables
+
+CREATE TABLE LoginDetails(
+Id varchar(8) PRIMARY KEY,
+Passwd varchar(255) NOT NULL,
+EmpType varchar(10) NOT NULL,
+CONSTRAINT chk_EmpType_login CHECK (EmpType IN ('Supervisor', 'Gardener'))
+);
+
+-- Query OK, 0 rows affected (0.03 sec)
+
+CREATE TABLE Gardener(
+Id varchar(8) PRIMARY KEY,
+Name varchar(30) NOT NULL,
+PhoneNo char(10) NOT NULL,
+Address varchar(50) NOT NULL,
+AddiPhoneNo char(10),
+AadharNo char(12) NOT NULL,
+EmpType char(1) NOT NULL,
+DateofJoining date NOT NULL,
+CONSTRAINT chk_PhoneNo CHECK (PhoneNo NOT LIKE '%[^0-9]%'),
+CONSTRAINT chk_AddiPhoneNo CHECK ((AddiPhoneNo IS NULL) OR (AddiPhoneNo NOT LIKE '%[^0-9]%')),
+CONSTRAINT chk_AadharNo CHECK (AadharNo NOT LIKE '%[^0-9]%'),
+CONSTRAINT chk_EmpType CHECK (EmpType IN ('P','T'))
+);
+
+-- Query OK, 0 rows affected (0.05 sec)
+
+CREATE TABLE Regions(
+RegionCode varchar(5) PRIMARY KEY,
+RegionName varchar(30) NOT NULL,
+Location varchar(50) NOT NULL,
+Area double NOT NULL,
+NoofTrees int,
+NoofWaterPumps int,
+CONSTRAINT chk_Area CHECK (Area > 0.0),
+CONSTRAINT chk_NoofTrees CHECK ((NoofTrees IS NULL) OR (NoofTrees >= 0)),
+CONSTRAINT chk_NoofWaterPumps CHECK ((NoofWaterPumps IS NULL) OR (NoofWaterPumps >= 0)) 
+);
+
+-- Query OK, 0 rows affected (0.03 sec)
+
+CREATE TABLE GardenerAssignment(
+GardenerID varchar(8) NOT NULL,
+RegionCode varchar(5) NOT NULL,
+StartDate  date NOT NULL,
+EndDate    date NOT NULL,
+CONSTRAINT Id_fk FOREIGN KEY (GardenerID) REFERENCES Gardener(Id),
+CONSTRAINT RegionCode_fk FOREIGN KEY (RegionCode) REFERENCES Regions(RegionCode) 
+);
+
+-- Query OK, 0 rows affected (0.06 sec)
+
+CREATE TABLE Equipment(
+EquipmentId int AUTO_INCREMENT PRIMARY KEY,
+EquipmentName varchar(40) NOT NULL,
+FuelTankCapacity double,
+BuyingDate date NOT NULL,
+WarrantyTillDate date,
+LastMaintenance date,
+NextMaintenance date,
+Status varchar(16) NOT NULL,
+CONSTRAINT chk_FuelTankCapacity CHECK ((FuelTankCapacity IS NULL) OR (FuelTankCapacity > 0.0)),
+CONSTRAINT chk_Status CHECK (Status IN ('INUSE','INREPAIR'))
+);
+
+-- Query OK, 0 rows affected (0.06 sec)
+
+CREATE TABLE Repairs(
+EquipmentId int NOT NULL,
+DateIssued date NOT NULL,
+DispatchDate date,
+Remarks varchar(150),
+CONSTRAINT EquipmentId_fk FOREIGN KEY (EquipmentId) REFERENCES Equipment(EquipmentId)
+);
+
+-- Query OK, 0 rows affected (0.06 sec)
+
+-- Triggers to update equipment table when row is inserted/delete in repairs table
+
+DELIMITER $$
+
+CREATE TRIGGER after_repairs_insert
+AFTER INSERT
+ON Repairs FOR EACH ROW 
+BEGIN
+UPDATE Equipment 
+SET Status = 'INREPAIR'
+WHERE Equipment.EquipmentId = NEW.EquipmentId;
+END $$
+
+-- Query OK, 0 rows affected (0.03 sec)
+
+CREATE TRIGGER after_repairs_delete
+AFTER DELETE
+ON Repairs FOR EACH ROW
+BEGIN
+UPDATE Equipment
+SET Status = 'INUSE'
+WHERE Equipment.EquipmentId = OLD.EquipmentId;
+END $$
+
+-- Query OK, 0 rows affected (0.02 sec)
+
+DELIMITER ;
+
+CREATE TABLE Requests(
+RegionCode varchar(5) NOT NULL,
+Remarks varchar(100),
+RequestDate date NOT NULL,
+CONSTRAINT RegionCode_request_fk FOREIGN KEY (RegionCode) REFERENCES Regions(RegionCode)
+);
+
+-- Query OK, 0 rows affected (0.05 sec)
+
+CREATE TABLE DutyRoster(
+Id varchar(8) NOT NULL,
+RegionCode varchar(5) NOT NULL,
+dateOfWork date NOT NULL,
+CONSTRAINT Id_fk_roster FOREIGN KEY (Id) REFERENCES Gardener(Id),
+CONSTRAINT RegionCode_fk_roster FOREIGN KEY (RegionCode) REFERENCES Regions(RegionCode),
+CONSTRAINT roster_pk PRIMARY KEY (Id, dateOfWork)
+);
+
+-- Query OK, 0 rows affected (0.06 sec)
+
+-- This table contains attendance of current month
+
+CREATE TABLE Attendance(
+GardenerID varchar(8) NOT NULL PRIMARY KEY,
+LastAttendanceDate date NOT NULL,
+AttendanceInCurrMonth int NOT NULL DEFAULT 0,
+CONSTRAINT GardenerID_fk_attend FOREIGN KEY (GardenerID) REFERENCES Gardener(Id)
+);
+
+-- Query OK, 0 rows affected (0.05 sec)
+
+-- Attendance Log contain attendances of all the months.
+
+CREATE TABLE AttendanceLog(
+GardenerID varchar(8) NOT NULL,
+Month varchar(8) NOT NULL,
+AttendanceValue int NOT NULL,
+CONSTRAINT GardenerID_fk_attend_log FOREIGN KEY (GardenerID) REFERENCES Gardener(Id),
+CONSTRAINT attendlog_pk PRIMARY KEY (GardenerID, Month)
+);
+
+-- Query OK, 0 rows affected (0.05 sec)
+
+-- Indexes
+
+CREATE INDEX idx_login ON LoginDetails(Id, Passwd);
+
+-- Query OK, 0 rows affected (0.07 sec)
+-- Records: 0  Duplicates: 0  Warnings: 0 
+
+CREATE INDEX idx_gardener ON Gardener(Id);
+
+-- Query OK, 0 rows affected (0.05 sec)
+-- Records: 0  Duplicates: 0  Warnings: 0
+
+CREATE INDEX idx_regions ON Regions(RegionCode);
+
+-- Query OK, 0 rows affected (0.05 sec)
+-- Records: 0  Duplicates: 0  Warnings: 0
+
+CREATE INDEX idx_equip ON Equipment(EquipmentId);
+
+-- Query OK, 0 rows affected (0.04 sec)
+-- Records: 0  Duplicates: 0  Warnings: 0
+
+-- Inserting data into the tables
+
+INSERT INTO Gardener VALUES
+('A0001','Suresh Kumar','8888999910','A-102, Kampa Village, Bihta, Bihar',NULL,'987654321712','P','2009-08-21'),
+('A0002','Mukesh Kumar','8888999912','A-100, Kampa Village, Bihta, Bihar','9578540000','987653421564','P','2010-04-22'),
+('A0003','Ram Singh','8888899550','B-109, Kampa Village, Bihta, Bihar',NULL,'995654321712','T','2011-06-10'),
+('A0004','Baji Singh','9564721532','A-111, Kampa Village, Bihta, Bihar','6875426890','725654321713','P','2017-05-10'),
+('A0005','Kirish Gupta','7523654253','D-10, Doha Village, Bihta, Bihar','9873216540','853554321712','T','2014-01-12'),
+('A0006','Ravi Gupta','9687452130','D-16, Doha Village, Bihta, Bihar',NULL,'889547321750','P','2009-06-17'),
+('A0007','Komal Singh','6545785214','E-07, Doha Village, Bihta, Bihar','9658888000','987655631712','P','2010-09-27'),
+('A0008','Paul Ray','9015556802','F-8, Doha Village, Bihta, Bihar',NULL,'654897321723','P','2015-10-09'),
+('A0009','Hetal Nandi','9854782145','D-20, Doha Village, Bihta, Bihar','9999554120','863524321789','T','2015-12-02'),
+('A0010','Joshua','8521457851','D-70, Diha Village, Bihta, Bihar','9999023210','987654321965','P','2009-04-19');
+
+-- Query OK, 10 rows affected (0.01 sec)
+-- Records: 10  Duplicates: 0  Warnings: 0
+
+INSERT INTO Regions VALUES
+('R0001','New Boys Hostel','Housing Area',200,10,4),
+('R0002','Old Boys Hostel','Housing Area',250,12,6),
+('R0003','Block-9','Academic Section',300,15,4),
+('R0004','Food Court','Near Admin Block',236,6,2),
+('R0005','Staff Hostel','Near Gate 2',400,20,6);
+
+-- Query OK, 5 rows affected (0.01 sec)
+-- Records: 5  Duplicates: 0  Warnings: 0
+
+INSERT INTO GardenerAssignment VALUES
+('A0001','R0001','2021-06-21','2021-12-25'),
+('A0002','R0001','2021-06-23','2021-12-25'),
+('A0003','R0002','2021-07-12','2021-12-25'),
+('A0004','R0002','2021-07-14','2022-01-23'),
+('A0005','R0003','2021-05-31','2022-02-26'),
+('A0006','R0003','2021-07-05','2021-12-16'),
+('A0007','R0004','2021-06-01','2022-01-02'),
+('A0008','R0005','2021-08-12','2022-01-14'),
+('A0009','R0005','2021-07-02','2022-03-25'),
+('A0010','R0005','2021-08-06','2022-01-19');
+
+-- Query OK, 10 rows affected (0.01 sec)
+-- Records: 10  Duplicates: 0  Warnings: 0
+
+INSERT INTO Requests VALUES
+('R0001','Grass cutting at east of the Boys Hostel','2021-11-15'),
+('R0001','Grass cutting at west of the Girls Hostel',CURDATE()),
+('R0002','Cutting of grass in the garden behind Old Hostel','2021-11-09'),
+('R0002','Grass cutting behind the Hostel','2021-11-17'),
+('R0003','Grass cutting in front of The Block 9','2021-11-05');
+
+-- Query OK, 5 rows affected (0.01 sec)
+-- Records: 5  Duplicates: 0  Warnings: 0
+
+INSERT INTO LoginDetails VALUES 
+('ADMIN', SHA2('admin@admin',256), 'Supervisor');
+
+-- Query OK, 1 row affected (0.01 sec)
+
+INSERT INTO Equipment(EquipmentName, FuelTankCapacity, BuyingDate, WarrantyTillDate, LastMaintenance, NextMaintenance, Status) VALUES
+("Grasscutter X01",NULL,"2010-08-21","2013-08-21","2021-07-21","2022-01-15","INUSE"),
+("Grasscutter X02",NULL,"2012-04-10","2014-04-10","2021-06-26","2022-01-02","INUSE"),
+("Grasscutter X03",NULL,"2014-06-11","2016-06-11","2021-08-10","2022-02-10","INUSE"),
+("Hand Blower A01",0.58,"2011-01-12","2016-01-12","2021-11-01","2022-05-02","INUSE"),
+("Hand Blower A02",0.75,"2015-09-25","2016-09-25","2021-10-11","2022-04-09","INUSE"),
+("Hand Blower B02",0.49,"2017-12-11","2020-12-11","2021-09-05","2022-03-01","INUSE"),
+("Chain Saw Machine G1",0.56,"2018-06-05","2021-06-05","2021-05-21","2022-12-10","INUSE"),
+("Chain Saw Machine G2",0.52,"2020-06-05","2024-06-05","2021-09-27","2022-03-25","INUSE"),
+("Chain Saw Machine G3",0.68,"2021-10-23","2025-10-23",NULL,"2022-04-20","INUSE"),
+("Shovel XSD",NULL,"2008-02-14",NULL,NULL,NULL,"INUSE");
+
+-- Query OK, 10 rows affected (0.01 sec)
+-- Records: 10  Duplicates: 0  Warnings: 0
+
+INSERT INTO Repairs VALUES 
+(10,'2021-11-15','2021-12-23','Blade broken'),
+(9,'2021-11-25', NULL, 'Hole in the fuel tank');
+
+-- Query OK, 2 rows affected (0.01 sec)
+-- Records: 2  Duplicates: 0  Warnings: 0
+
+INSERT INTO Attendance VALUES
+('A0001','2021-11-28',27),
+('A0002','2021-11-28',27),
+('A0003','2021-11-28',25),
+('A0004','2021-11-28',23),
+('A0005','2021-11-28',20),
+('A0006','2021-11-28',15),
+('A0007','2021-11-28',17),
+('A0008','2021-11-27',21),
+('A0009','2021-11-27',26),
+('A0010','2021-11-28',27);
+
+-- Query OK, 10 rows affected (0.01 sec)
+-- Records: 10  Duplicates: 0  Warnings: 0
+
+-- Procedure to mark attendance (absent/present)
+
+DELIMITER $$
+
+CREATE PROCEDURE mark_attendance(in ID varchar(8), in present int)
+BEGIN
+DECLARE cnt int;
+SELECT COUNT(*) INTO cnt FROM Attendance WHERE Attendance.GardenerID = ID;
+IF (cnt > 0) THEN
+	IF (present > 0) THEN
+	UPDATE Attendance SET LastAttendanceDate = CURDATE(), AttendanceInCurrMonth = AttendanceInCurrMonth + 1 WHERE Attendance.GardenerID = ID;
+	ELSE
+	UPDATE Attendance SET LastAttendanceDate = CURDATE() WHERE Attendance.GardenerID = ID;
+	END IF;
+ELSE
+	IF (present > 0) THEN
+	INSERT INTO Attendance VALUES (ID, CURDATE(), 1);
+	ELSE
+	INSERT INTO Attendance VALUES (ID, CURDATE(), 0);
+	END IF;
+END IF;
+END $$
+
+-- Query OK, 0 rows affected (0.03 sec)
+
+DELIMITER ;
+
+-- Procedure to submit/store attendances of current month in attendance log table and reset attendance count.
+
+DELIMITER $$
+
+CREATE PROCEDURE submit_attendance()
+BEGIN
+INSERT INTO AttendanceLog SELECT GardenerID, LEFT(LastAttendanceDate,7), AttendanceInCurrMonth FROM Attendance;
+UPDATE Attendance SET AttendanceInCurrMonth = 0;
+END $$
+
+-- Query OK, 0 rows affected (0.01 sec)
+
+DELIMITER ;
+
+-- Create a table containing upcoming 30 day's dates( used for duty roster )
+
+DELIMITER $$
+
+CREATE PROCEDURE thirty_days_from_now()
+BEGIN
+DECLARE cnt int;
+DECLARE var_date date;
+DROP TABLE IF EXISTS DATE_TEMP;
+CREATE TABLE DATE_TEMP(
+thirty_dates date NOT NULL
+);
+SET cnt = 1;
+SET var_date = CURDATE();
+WHILE (cnt<=30) DO
+	INSERT INTO DATE_TEMP VALUES (var_date);
+	SET var_date = DATE_ADD(var_date, INTERVAL 1 day);
+	SET cnt = cnt + 1; 
+END WHILE;
+END $$
+
+-- Query OK, 0 rows affected (0.02 sec)
+
+DELIMITER ;
+
+CALL thirty_days_from_now();
+-- Query OK, 1 row affected (0.08 sec)
+
+-- +--------------+
+-- | thirty_dates |
+-- +--------------+
+-- | 2021-11-29   |
+-- | 2021-11-30   |
+-- | 2021-12-01   |
+-- | 2021-12-02   |
+-- | 2021-12-03   |
+-- | 2021-12-04   |
+-- | 2021-12-05   |
+-- | 2021-12-06   |
+-- | 2021-12-07   |
+-- | 2021-12-08   |
+-- | 2021-12-09   |
+-- | 2021-12-10   |
+-- | 2021-12-11   |
+-- | 2021-12-12   |
+-- | 2021-12-13   |
+-- | 2021-12-14   |
+-- | 2021-12-15   |
+-- | 2021-12-16   |
+-- | 2021-12-17   |
+-- | 2021-12-18   |
+-- | 2021-12-19   |
+-- | 2021-12-20   |
+-- | 2021-12-21   |
+-- | 2021-12-22   |
+-- | 2021-12-23   |
+-- | 2021-12-24   |
+-- | 2021-12-25   |
+-- | 2021-12-26   |
+-- | 2021-12-27   |
+-- | 2021-12-28   |
+-- +--------------+
+-- 30 rows in set (0.00 sec)
+
